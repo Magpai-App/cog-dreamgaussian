@@ -10,6 +10,10 @@ from utils.image_utils import preprocess
 from utils.file_utils import download_model
 from cog import BasePredictor, Input, Path
 
+import zipfile
+import trimesh
+import tempfile
+from PIL import Image
 
 
 CHECKPOINT_URLS = [
@@ -140,4 +144,25 @@ class Predictor(BasePredictor):
             iters_refine=num_refinement_steps,
             num_pts=num_point_samples
         )
-        return output
+
+        zip_path = output[0]
+        video_path = output[-1]
+        glb_path = "/tmp/model.glb"
+
+        # Convert obj and mtl files to glb
+
+        tmpdir = "/tmp/unzip"
+        
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(tmpdir)
+
+        mesh = trimesh.load(f"{tmpdir}/logs/image.obj")
+        uv = mesh.visual.uv
+        im = Image.open(f"{tmpdir}/logs/image_albedo.png")
+        material = trimesh.visual.texture.SimpleMaterial(image=im)
+        color_visuals = trimesh.visual.TextureVisuals(uv=uv, image=im, material=material)
+        mesh.visual = color_visuals
+        mesh.export(glb_path)
+
+
+        return [video_path, Path(glb_path), Path(f"{tmpdir}/logs/image.obj"), Path(f"{tmpdir}/logs/image_albedo.png"), zip_path]

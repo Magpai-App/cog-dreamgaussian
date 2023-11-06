@@ -14,7 +14,7 @@ import zipfile
 import trimesh
 import tempfile
 from PIL import Image
-
+import glob
 
 CHECKPOINT_URLS = [
     ("https://storage.googleapis.com/replicate-weights/DreamGaussian/sd-2-1.tar", "/src/stable-diffusion-2-1-base"),
@@ -155,14 +155,23 @@ class Predictor(BasePredictor):
         
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             zip_ref.extractall(tmpdir)
-
-        mesh = trimesh.load(f"{tmpdir}/logs/image.obj")
+        
+        obj_files = glob.glob(f"{tmpdir}/logs/*.obj")
+        if len(obj_files) == 0:
+            raise ValueError("No obj files found in logs directory")
+        
+        mesh = trimesh.load(obj_files[0])        
         uv = mesh.visual.uv
-        im = Image.open(f"{tmpdir}/logs/image_albedo.png")
+        
+        img_files = glob.glob(f"{tmpdir}/logs/*_albedo.png")
+        if len(img_files) == 0:
+            raise ValueError("No obj files found in logs directory")
+        im = Image.open(img_files[0])
+        
         material = trimesh.visual.texture.SimpleMaterial(image=im)
         color_visuals = trimesh.visual.TextureVisuals(uv=uv, image=im, material=material)
         mesh.visual = color_visuals
         mesh.export(glb_path)
 
 
-        return [video_path, Path(glb_path), Path(f"{tmpdir}/logs/image.obj"), Path(f"{tmpdir}/logs/image_albedo.png"), zip_path]
+        return [video_path, Path(glb_path), Path(obj_files[0]), Path(img_files[0]), zip_path]
